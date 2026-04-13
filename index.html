@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>FocusFlow — Intelligent Study Tracker</title>
+        <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+        <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.1.0/dist/blazeface.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+        <link rel="stylesheet" href="style.css">
+    </head>
+    <body>
+        <div class="app">
+
+        <!-- HEADER -->
+        <header class="header">
+        <div class="logo">
+            <div class="logo-mark">⚡</div>
+            <div class="logo-text">FOCUS<em>FLOW</em></div>
+        </div>
+        <div class="header-right">
+            <div class="pill idle" id="focusPill"><div class="dot"></div><span id="pillTxt">IDLE</span></div>
+            <div class="header-time">FOCUS: <span id="hdrFocus">00:00:00</span></div>
+        </div>
+        </header>
+
+        <!-- NAV -->
+        <nav class="nav">
+        <button class="nav-btn active" onclick="switchTab('focus',this)">⏱ Focus</button>
+        <button class="nav-btn" onclick="switchTab('study',this)">📚 Study</button>
+        <button class="nav-btn" onclick="switchTab('analytics',this)">📊 Analytics</button>
+        </nav>
+
+        <!-- CONTENT -->
+        <div class="content">
+
+        <!-- ── FOCUS PANEL ── -->
+        <div class="panel active" id="tab-focus">
+            <div class="focus-grid">
+
+            <!-- Camera -->
+            <div>
+                <div class="card-label">CAMERA FEED</div>
+                <div class="card" style="padding:0;overflow:hidden">
+                <div class="cam-wrap" id="camWrap">
+                    <video id="camera" autoplay muted playsinline></video>
+                    <canvas id="faceCanvas"></canvas>
+                    <div class="cam-border" id="camBorder"></div>
+                    <div class="cam-tag">FACE DETECTION</div>
+                    <div class="cam-status" id="camStatus">Initializing camera…</div>
+                </div>
+                </div>
+                <div class="model-load" id="modelLoad"><div class="spinner"></div><span>Loading face detection model…</span></div>
+                <div style="margin-top:10px;font-size:10px;color:var(--text-3);line-height:1.7">
+                Timer pauses automatically when no face is detected for 2 seconds.
+                </div>
+            </div>
+
+            <!-- Timer -->
+            <div class="timer-section">
+                <div class="ring-wrap">
+                <svg class="ring-svg" viewBox="0 0 250 250">
+                    <defs>
+                    <linearGradient id="grad" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stop-color="#06b6d4"/>
+                        <stop offset="100%" stop-color="#818cf8"/>
+                    </linearGradient>
+                    </defs>
+                    <circle class="ring-bg" cx="125" cy="125" r="110"/>
+                    <circle class="ring-track" id="ringTrack" cx="125" cy="125" r="110"/>
+                </svg>
+                <div class="ring-center">
+                    <div class="timer-num" id="timerNum">00:00:00</div>
+                    <div class="timer-tag">ELAPSED</div>
+                    <div class="focus-num" id="focusNum">FOCUS: 00:00:00</div>
+                </div>
+                </div>
+
+                <div class="controls">
+                <div class="dur-row" id="durRow">
+                    <span class="dur-tag">TARGET:</span>
+                    <input type="number" class="dur-input" id="durInput" value="60" min="1" max="480">
+                    <span style="font-size:10px;color:var(--text-3)">MIN</span>
+                </div>
+                <div class="btn-row" id="ctrlBtns">
+                    <button class="btn btn-primary" onclick="startSession()">▶ START SESSION</button>
+                </div>
+                <div class="hint">Break triggers after every <span style="color:var(--amber)">60 min</span> of focus</div>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div>
+                <div class="card-label">SESSION STATS</div>
+                <div class="stats">
+                <div class="stat">
+                    <div class="stat-tag">Focus Time</div>
+                    <div class="stat-val" id="sFocus">00:00:00</div>
+                    <div class="stat-sub">Active concentration</div>
+                    <div class="bar"><div class="bar-fill" id="focusBar"></div></div>
+                </div>
+                <div class="stat">
+                    <div class="stat-tag">Distractions</div>
+                    <div class="stat-val" id="sDistract">0</div>
+                    <div class="stat-sub">Times looked away</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-tag">Focus Rate</div>
+                    <div class="stat-val" id="sRate">—</div>
+                    <div class="stat-sub">Of elapsed time</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-tag">Breaks Taken</div>
+                    <div class="stat-val" id="sBreaks">0</div>
+                    <div class="stat-sub">10 min each</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-tag">Next Break In</div>
+                    <div class="stat-val" id="sNextBreak">—</div>
+                    <div class="stat-sub">Focus minutes</div>
+                </div>
+                </div>
+            </div>
+
+            </div>
+        </div>
+
+        <!-- ── STUDY PANEL ── -->
+        <div class="panel" id="tab-study">
+            <div class="study-grid">
+
+            <!-- Notes -->
+            <div class="notes-col">
+                <div class="card-label">YOUR NOTES</div>
+
+                <div class="model-row">
+                <label>Ollama Model:</label>
+                <input type="text" class="txt-input" id="modelInput" value="llama3.2" placeholder="llama3.2, mistral…">
+                </div>
+
+                <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileIn').click()">
+                <div class="drop-icon">📄</div>
+                <div>Drop notes here or <strong>click to upload</strong></div>
+                <div style="margin-top:5px;font-size:10px;color:var(--text-3)">TXT or MD files</div>
+                </div>
+                <input type="file" id="fileIn" accept=".txt,.md,.text" style="display:none" onchange="loadFile(event)">
+
+                <div class="card-label" style="margin-bottom:6px">PREVIEW</div>
+                <div class="notes-view" id="notesView">No notes uploaded yet.</div>
+
+                <button class="btn btn-secondary" style="width:100%" onclick="clearNotes()">✕ Clear Notes</button>
+            </div>
+
+            <!-- Chat -->
+            <div class="chat-col">
+                <div class="card-label" style="padding:0 0 10px">AI STUDY ASSISTANT  <span style="color:var(--text-3);font-size:9px">(OLLAMA)</span></div>
+                <div class="chat-msgs" id="chatMsgs">
+                <div class="msg sys">Upload your notes and start asking questions!</div>
+                <div class="msg ai">
+                    <div class="msg-from">ASSISTANT</div>
+                    Hello! I'm your AI study assistant running via Ollama. Upload your study notes and I can help you:<br><br>
+                    • 📝 Summarize key concepts<br>
+                    • ❓ Quiz you on the material<br>
+                    • 💡 Explain difficult topics<br>
+                    • 🔗 Connect ideas across topics<br><br>
+                    What would you like to work on?
+                </div>
+                </div>
+                <div class="chat-foot">
+                <textarea class="chat-in" id="chatIn" placeholder="Ask about your notes… (Enter to send)" rows="2" onkeydown="chatKey(event)"></textarea>
+                <button class="send-btn" onclick="sendChat()" title="Send">➤</button>
+                </div>
+            </div>
+
+            </div>
+        </div>
+
+        <!-- ── ANALYTICS PANEL ── -->
+        <div class="panel" id="tab-analytics">
+            <div class="analytics-grid">
+            <div class="empty" id="emptyState">
+                <div class="empty-icon">📊</div>
+                <div class="empty-h">No Session Data Yet</div>
+                <div style="font-size:12px">Complete a study session to view your focus analytics.</div>
+            </div>
+
+            <div id="analyticsData" style="display:none">
+                <div class="summary-row" id="sumRow"></div>
+                <div class="chart-card" style="margin-top:22px">
+                <div class="chart-h">Focus Timeline (per minute)</div>
+                <canvas id="tlChart" height="90"></canvas>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:22px">
+                <div class="chart-card">
+                    <div class="chart-h">Time Distribution</div>
+                    <canvas id="distChart" height="180"></canvas>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-h">Session Milestones</div>
+                    <canvas id="milChart" height="180"></canvas>
+                </div>
+                </div>
+            </div>
+            </div>
+        </div>
+
+        </div><!-- /content -->
+
+        <!-- BREAK OVERLAY -->
+        <div class="break-bg" id="breakBg">
+        <div style="font-size:52px;animation:blink 2s infinite">💧</div>
+        <div class="break-h">BREAK TIME!</div>
+        <div class="break-sub">
+            You've been focusing for 60 minutes — great work!<br>
+            Step away, rest your eyes, and rehydrate.
+        </div>
+        <div class="break-num" id="breakNum">10:00</div>
+        <div class="act-row">
+            <span class="act">💧 Drink water</span>
+            <span class="act">👁️ Rest eyes (20-20-20)</span>
+            <span class="act">🚶 Walk around</span>
+            <span class="act">🌬️ Deep breaths</span>
+            <span class="act">🌿 Look outside</span>
+            <span class="act">🙆 Stretch</span>
+        </div>
+        <button class="btn btn-secondary" onclick="skipBreak()">Skip Break →</button>
+        </div>
+
+        <div class="toast" id="toast"></div>
+        </div>
+
+        <script rel="script" src="script.js"></script>
+    </body>
+</html>
